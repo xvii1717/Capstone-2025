@@ -1,0 +1,15 @@
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\bin\Debug\net6.0-windows\ProductivityApp.exe
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\bin\Debug\net6.0-windows\ProductivityApp.deps.json
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\bin\Debug\net6.0-windows\ProductivityApp.runtimeconfig.json
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\bin\Debug\net6.0-windows\ProductivityApp.dll
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\bin\Debug\net6.0-windows\ProductivityApp.pdb
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\obj\Debug\net6.0-windows\ProductivityApp.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\obj\Debug\net6.0-windows\ProductivityApp.AssemblyInfoInputs.cache
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\obj\Debug\net6.0-windows\ProductivityApp.AssemblyInfo.cs
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\obj\Debug\net6.0-windows\ProductivityApp.csproj.CoreCompileInputs.cache
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\obj\Debug\net6.0-windows\ProductivityApp.sourcelink.json
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\obj\Debug\net6.0-windows\ProductivityApp.dll
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\obj\Debug\net6.0-windows\refint\ProductivityApp.dll
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\obj\Debug\net6.0-windows\ProductivityApp.pdb
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\obj\Debug\net6.0-windows\ProductivityApp.genruntimeconfig.cache
+C:\Users\thoma\Documents\GitHub\Capstone-2025\ProductivityApp\obj\Debug\net6.0-windows\ref\ProductivityApp.dll
