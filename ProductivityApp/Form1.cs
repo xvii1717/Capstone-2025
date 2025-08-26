@@ -1,3 +1,4 @@
+using System;
 using System.Windows.Forms;
 
 namespace ProductivityApp
@@ -12,6 +13,34 @@ namespace ProductivityApp
             this.WindowState = FormWindowState.Normal;
             this.KeyPreview = true;
             this.KeyDown += Form1_KeyDown;
+            // Panels start visible
+            todoPanel.Visible = true;
+            calendarPanel.Visible = true;
+        }
+
+        private void showHideTodoButton_Click(object sender, EventArgs e)
+        {
+            todoPanel.Visible = !todoPanel.Visible;
+            showHideTodoButton.Text = todoPanel.Visible ? "Hide To-Do" : "Show To-Do";
+        }
+
+        private void showHideCalendarButton_Click(object sender, EventArgs e)
+        {
+            calendarPanel.Visible = !calendarPanel.Visible;
+            showHideCalendarButton.Text = calendarPanel.Visible ? "Hide Calendar" : "Show Calendar";
+        }
+
+        private void exitToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
+
+        private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (var settingsForm = new SettingsForm())
+            {
+                settingsForm.ShowDialog();
+            }
         }
 
         private int todoCount = 1;
