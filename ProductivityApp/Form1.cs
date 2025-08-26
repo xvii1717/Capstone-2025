@@ -5,66 +5,70 @@ namespace ProductivityApp
 {
     public partial class Form1 : Form
     {
-
         public Form1()
         {
             InitializeComponent();
-            // Start in normal window, but allow fullscreen
-            this.WindowState = FormWindowState.Normal;
-            this.KeyPreview = true;
-            this.KeyDown += Form1_KeyDown;
-            // Panels start visible
-            todoPanel.Visible = true;
-            calendarPanel.Visible = true;
+            this.WindowState = FormWindowState.Maximized;
+            this.FormBorderStyle = FormBorderStyle.Sizable;
+            ShowMainMenu();
         }
 
-        private void showHideTodoButton_Click(object sender, EventArgs e)
+        private void addTodoButton_Click(object sender, EventArgs e)
         {
-            todoPanel.Visible = !todoPanel.Visible;
-            showHideTodoButton.Text = todoPanel.Visible ? "Hide To-Do" : "Show To-Do";
-        }
-
-        private void showHideCalendarButton_Click(object sender, EventArgs e)
-        {
-            calendarPanel.Visible = !calendarPanel.Visible;
-            showHideCalendarButton.Text = calendarPanel.Visible ? "Hide Calendar" : "Show Calendar";
-        }
-
-        private void exitToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            Application.Exit();
-        }
-
-        private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            using (var settingsForm = new SettingsForm())
+            string input = Microsoft.VisualBasic.Interaction.InputBox("Enter a new to-do item:", "Add To-Do", "");
+            if (!string.IsNullOrWhiteSpace(input))
             {
-                settingsForm.ShowDialog();
+                todoListBox.Items.Add(input);
             }
         }
-
-        private int todoCount = 1;
-        private void addTodoButton_Click(object sender, System.EventArgs e)
-        {
-            todoListBox.Items.Add($"To-Do Node {todoCount++}");
-        }
-
-        private void Form1_KeyDown(object sender, KeyEventArgs e)
-        {
-            // Toggle fullscreen with F11
-            if (e.KeyCode == Keys.F11)
+            
+            private void ShowMainMenu()
             {
-                if (this.WindowState == FormWindowState.Normal)
+                mainMenuPanel.Visible = true;
+                calendarPanel.Visible = false;
+                todoPanel.Visible = false;
+            }
+            
+            private void ShowCalendar()
+            {
+                mainMenuPanel.Visible = false;
+                calendarPanel.Visible = true;
+                todoPanel.Visible = false;
+            }
+            
+            private void ShowTodo()
+            {
+                mainMenuPanel.Visible = false;
+                calendarPanel.Visible = false;
+                todoPanel.Visible = true;
+            }
+            
+            private void settingsButton_Click(object sender, EventArgs e)
+            {
+                using (var settingsForm = new SettingsForm())
                 {
-                    this.WindowState = FormWindowState.Maximized;
-                    this.FormBorderStyle = FormBorderStyle.None;
-                }
-                else
-                {
-                    this.WindowState = FormWindowState.Normal;
-                    this.FormBorderStyle = FormBorderStyle.Sizable;
+                    settingsForm.ShowDialog();
                 }
             }
-        }
+            
+            private void calendarButton_Click(object sender, EventArgs e)
+            {
+                ShowCalendar();
+            }
+            
+            private void todoButton_Click(object sender, EventArgs e)
+            {
+                ShowTodo();
+            }
+            
+            private void backButton_Click(object sender, EventArgs e)
+            {
+                ShowMainMenu();
+            }
+
+            private void todoBackButton_Click(object sender, EventArgs e)
+            {
+                ShowMainMenu();
+            }
     }
 }
