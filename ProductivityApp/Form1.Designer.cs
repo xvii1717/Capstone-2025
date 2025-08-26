@@ -31,7 +31,10 @@ namespace ProductivityApp
     private System.Windows.Forms.Panel calendarPanel;
     private System.Windows.Forms.ListBox todoListBox;
     private System.Windows.Forms.Button addTodoButton;
-    private System.Windows.Forms.MonthCalendar monthCalendar;
+    private System.Windows.Forms.Panel calendarGridPanel;
+    private System.Windows.Forms.ComboBox calendarViewComboBox;
+    private System.Windows.Forms.ListBox eventListBox;
+    private System.Windows.Forms.Button addEventButton;
         private System.Windows.Forms.Button settingsButton;
         private System.Windows.Forms.Button calendarButton;
         private System.Windows.Forms.Button todoButton;
@@ -45,7 +48,10 @@ namespace ProductivityApp
             this.calendarPanel = new System.Windows.Forms.Panel();
             this.todoListBox = new System.Windows.Forms.ListBox();
             this.addTodoButton = new System.Windows.Forms.Button();
-            this.monthCalendar = new System.Windows.Forms.MonthCalendar();
+            this.calendarGridPanel = new System.Windows.Forms.Panel();
+            this.calendarViewComboBox = new System.Windows.Forms.ComboBox();
+            this.eventListBox = new System.Windows.Forms.ListBox();
+            this.addEventButton = new System.Windows.Forms.Button();
             this.settingsButton = new System.Windows.Forms.Button();
             this.calendarButton = new System.Windows.Forms.Button();
             this.todoButton = new System.Windows.Forms.Button();
@@ -130,15 +136,98 @@ namespace ProductivityApp
             // calendarPanel
             this.calendarPanel.Dock = System.Windows.Forms.DockStyle.Fill;
             this.calendarPanel.BackColor = System.Drawing.Color.WhiteSmoke;
+            // Top bar controls
+            var calendarTopBar = new System.Windows.Forms.Panel();
+            calendarTopBar.Dock = System.Windows.Forms.DockStyle.Top;
+            calendarTopBar.Height = 56;
+            calendarTopBar.BackColor = System.Drawing.Color.FromArgb(30, 30, 30);
+            calendarTopBar.Padding = new System.Windows.Forms.Padding(16, 8, 16, 8);
+
+            var todayButton = new System.Windows.Forms.Button();
+            todayButton.Text = "Today";
+            todayButton.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            todayButton.Size = new System.Drawing.Size(80, 32);
+            todayButton.Location = new System.Drawing.Point(16, 12);
+            todayButton.BackColor = System.Drawing.Color.FromArgb(40, 40, 40);
+            todayButton.ForeColor = System.Drawing.Color.White;
+            todayButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            todayButton.Click += new System.EventHandler(this.TodayButton_Click);
+            calendarTopBar.Controls.Add(todayButton);
+
+            var prevMonthButton = new System.Windows.Forms.Button();
+            prevMonthButton.Text = "<";
+            prevMonthButton.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold);
+            prevMonthButton.Size = new System.Drawing.Size(32, 32);
+            prevMonthButton.Location = new System.Drawing.Point(110, 12);
+            prevMonthButton.BackColor = System.Drawing.Color.FromArgb(40, 40, 40);
+            prevMonthButton.ForeColor = System.Drawing.Color.White;
+            prevMonthButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            prevMonthButton.Click += new System.EventHandler(this.PrevMonthButton_Click);
+            calendarTopBar.Controls.Add(prevMonthButton);
+
+            var nextMonthButton = new System.Windows.Forms.Button();
+            nextMonthButton.Text = ">";
+            nextMonthButton.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold);
+            nextMonthButton.Size = new System.Drawing.Size(32, 32);
+            nextMonthButton.Location = new System.Drawing.Point(150, 12);
+            nextMonthButton.BackColor = System.Drawing.Color.FromArgb(40, 40, 40);
+            nextMonthButton.ForeColor = System.Drawing.Color.White;
+            nextMonthButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            nextMonthButton.Click += new System.EventHandler(this.NextMonthButton_Click);
+            calendarTopBar.Controls.Add(nextMonthButton);
+
+            var monthLabel = new System.Windows.Forms.Label();
+            monthLabel.Text = "Month Year";
+            monthLabel.Font = new System.Drawing.Font("Segoe UI", 14F, System.Drawing.FontStyle.Bold);
+            monthLabel.ForeColor = System.Drawing.Color.White;
+            monthLabel.Location = new System.Drawing.Point(200, 12);
+            monthLabel.AutoSize = true;
+            monthLabel.Name = "monthLabel";
+            calendarTopBar.Controls.Add(monthLabel);
+
+            this.calendarPanel.Controls.Add(calendarTopBar);
             this.calendarPanel.Controls.Add(this.backButton);
-            this.calendarPanel.Controls.Add(this.monthCalendar);
+            this.backButton.Location = new System.Drawing.Point(16, 64);
+            this.backButton.Size = new System.Drawing.Size(80, 32);
+            this.backButton.Text = "Back";
+            this.backButton.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.backButton.BackColor = System.Drawing.Color.FromArgb(40, 40, 40);
+            this.backButton.ForeColor = System.Drawing.Color.White;
+            this.backButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.calendarPanel.Controls.Add(this.calendarGridPanel);
+            this.calendarPanel.Controls.Add(this.calendarViewComboBox);
+            this.calendarPanel.Controls.Add(this.eventListBox);
+            this.calendarPanel.Controls.Add(this.addEventButton);
             this.calendarPanel.Name = "calendarPanel";
             this.calendarPanel.Size = new System.Drawing.Size(800, 450);
             this.calendarPanel.TabIndex = 102;
 
-            // monthCalendar
-            this.monthCalendar.Location = new System.Drawing.Point(220, 60);
-            this.monthCalendar.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right | System.Windows.Forms.AnchorStyles.Bottom;
+            // calendarGridPanel
+            this.calendarGridPanel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.calendarGridPanel.BackColor = System.Drawing.Color.FromArgb(30, 30, 30);
+            this.calendarGridPanel.BorderStyle = System.Windows.Forms.BorderStyle.None;
+
+            // calendarViewComboBox
+            this.calendarViewComboBox.Location = new System.Drawing.Point(220, 20);
+            this.calendarViewComboBox.Size = new System.Drawing.Size(200, 28);
+            this.calendarViewComboBox.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.calendarViewComboBox.Items.AddRange(new object[] {"Month View", "Week View"});
+            this.calendarViewComboBox.SelectedIndex = 0;
+            this.calendarViewComboBox.SelectedIndexChanged += new System.EventHandler(this.calendarViewComboBox_SelectedIndexChanged);
+
+            // eventListBox
+            this.eventListBox.Location = new System.Drawing.Point(500, 60);
+            this.eventListBox.Size = new System.Drawing.Size(250, 300);
+            this.eventListBox.Font = new System.Drawing.Font("Segoe UI", 10F);
+            this.eventListBox.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right | System.Windows.Forms.AnchorStyles.Bottom;
+
+            // addEventButton
+            this.addEventButton.Location = new System.Drawing.Point(500, 370);
+            this.addEventButton.Size = new System.Drawing.Size(120, 36);
+            this.addEventButton.Text = "Add Event";
+            this.addEventButton.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.addEventButton.Anchor = System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right;
+            this.addEventButton.Click += new System.EventHandler(this.addEventButton_Click);
 
             // Form1
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
