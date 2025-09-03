@@ -12,12 +12,26 @@ namespace ProductivityApp
     {
         private int currentYear = DateTime.Now.Year;
         private int currentMonth = DateTime.Now.Month;
+        public static string CurrentUsername { get; set; }
+        private string CalendarDataFile => $"calendarEvents_{CurrentUsername}.json";
+        private string TodoDataFile => $"todoList_{CurrentUsername}.json";
 
-        private const string CalendarDataFile = "calendarEvents.json";
-        private const string TodoDataFile = "todoList.json";
+        private Button logoutButton;
 
         public Form1()
         {
+            // Show login form
+            using (var loginForm = new LoginForm())
+            {
+                if (loginForm.ShowDialog() == DialogResult.OK)
+                {
+                    CurrentUsername = loginForm.Username;
+                }
+                else
+                {
+                    Environment.Exit(0);
+                }
+            }
             InitializeComponent();
             this.WindowState = FormWindowState.Maximized;
             this.FormBorderStyle = FormBorderStyle.Sizable;
@@ -29,20 +43,84 @@ namespace ProductivityApp
                 RenderCalendar(currentYear, currentMonth);
             };
 
-            // To-Do List: Right-click to remove
+            // To-Do List: double-click or right-click to remove and sync with calendar
             todoListBox.MouseUp += (s, e) =>
             {
-                if (e.Button == MouseButtons.Right && todoListBox.SelectedItem != null)
+                if ((e.Button == MouseButtons.Right || e.Button == MouseButtons.Left) && todoListBox.SelectedItem != null)
                 {
-                    var result = MessageBox.Show($"Remove '{todoListBox.SelectedItem}'?", "Remove To-Do", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    var item = todoListBox.SelectedItem.ToString();
+                    var result = MessageBox.Show($"Remove '{item}'? This will also remove it from the calendar.", "Remove To-Do", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                     if (result == DialogResult.Yes)
                     {
-                        todoListBox.Items.Remove(todoListBox.SelectedItem);
+                        todoListBox.Items.Remove(item);
+                        // Remove from calendar if present
+                        foreach (var date in calendarEvents.Keys.ToList())
+                        {
+                            calendarEvents[date].RemoveAll(ev => ev.Contains(item));
+                            if (calendarEvents[date].Count == 0)
+                                calendarEvents.Remove(date);
+                        }
+                        SaveData();
+                        RenderCalendar(currentYear, currentMonth);
+                    }
+                }
+            };
+            todoListBox.DoubleClick += (s, e) =>
+            {
+                if (todoListBox.SelectedItem != null)
+                {
+                    var item = todoListBox.SelectedItem.ToString();
+                    var result = MessageBox.Show($"Remove '{item}'? This will also remove it from the calendar.", "Remove To-Do", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    if (result == DialogResult.Yes)
+                    {
+                        todoListBox.Items.Remove(item);
+                        foreach (var date in calendarEvents.Keys.ToList())
+                        {
+                            calendarEvents[date].RemoveAll(ev => ev.Contains(item));
+                            if (calendarEvents[date].Count == 0)
+                                calendarEvents.Remove(date);
+                        }
+                        SaveData();
+                        RenderCalendar(currentYear, currentMonth);
                     }
                 }
             };
 
+            // Calendar event: right-click to remove and sync with to-do list
             this.FormClosing += (s, e) => SaveData();
+
+            logoutButton = new Button {
+                Text = "Logout",
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                Size = new Size(120, 40),
+                BackColor = Color.FromArgb(60, 90, 180),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat
+            };
+            // Center horizontally and place below other buttons
+            logoutButton.Location = new Point((mainMenuPanel.Width - logoutButton.Width) / 2, 260);
+            mainMenuPanel.Resize += (s, e) => {
+                logoutButton.Location = new Point((mainMenuPanel.Width - logoutButton.Width) / 2, 260);
+            };
+            logoutButton.Click += (s, e) => {
+                this.Hide();
+                using (var loginForm = new LoginForm())
+                {
+                    if (loginForm.ShowDialog() == DialogResult.OK)
+                    {
+                        CurrentUsername = loginForm.Username;
+                        LoadData();
+                        ShowMainMenu();
+                        RenderCalendar(currentYear, currentMonth);
+                        this.Show();
+                    }
+                    else
+                    {
+                        Application.Exit();
+                    }
+                }
+            };
+            mainMenuPanel.Controls.Add(logoutButton);
         }
 
         private void SaveData()
@@ -220,17 +298,37 @@ namespace ProductivityApp
                                     BackColor = Color.Transparent,
                                     Tag = i // index for removal
                                 };
-                                // Right-click to remove event
+                                // Right-click to remove event and sync with to-do list
                                 eventLabel.MouseUp += (s2, e2) =>
                                 {
                                     if (e2.Button == MouseButtons.Right)
                                     {
-                                        var result = MessageBox.Show($"Remove event '{evt}'?", "Remove Event", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                                        var result = MessageBox.Show($"Remove event '{evt}'? This will also remove it from the to-do list if present.", "Remove Event", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                                         if (result == DialogResult.Yes)
                                         {
                                             calendarEvents[date].RemoveAt((int)eventLabel.Tag);
                                             if (calendarEvents[date].Count == 0)
                                                 calendarEvents.Remove(date);
+                                            // Remove from to-do list if present
+                                            foreach (var todo in todoListBox.Items.Cast<string>().ToList())
+                                            {
+                                                // Extract base to-do text (before date in parentheses)
+                                                var baseTodo = todo;
+                                                int idx = baseTodo.IndexOf("(");
+                                                if (idx > 0)
+                                                    baseTodo = baseTodo.Substring(0, idx).Trim();
+                                                // Remove "To-Do:" prefix if present
+                                                if (baseTodo.StartsWith("To-Do:"))
+                                                    baseTodo = baseTodo.Substring(7).Trim();
+                                                // Extract base event text (remove "To-Do:" if present)
+                                                var baseEvt = evt;
+                                                if (baseEvt.StartsWith("To-Do:"))
+                                                    baseEvt = baseEvt.Substring(7).Trim();
+                                                // Compare base texts
+                                                if (string.Equals(baseTodo, baseEvt, StringComparison.OrdinalIgnoreCase))
+                                                    todoListBox.Items.Remove(todo);
+                                            }
+                                            SaveData();
                                             RenderCalendar(year, month);
                                         }
                                     }
@@ -257,7 +355,6 @@ namespace ProductivityApp
             }
             calendarGridPanel.ResumeLayout();
         }
-// ...existing code...
 
         private void addTodoButton_Click(object sender, EventArgs e)
         {
