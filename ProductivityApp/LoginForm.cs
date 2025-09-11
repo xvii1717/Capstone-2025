@@ -19,13 +19,16 @@ namespace ProductivityApp
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.Black;
             this.Padding = new Padding(0);
-            this.Paint += (s, e) => {
-                var rect = this.ClientRectangle;
-                using (var brush = new System.Drawing.Drawing2D.LinearGradientBrush(rect, Color.FromArgb(20, 30, 60), Color.FromArgb(40, 60, 120), 45F))
-                {
-                    e.Graphics.FillRectangle(brush, rect);
-                }
-            };
+            this.Paint += LoginForm_Paint;
+        }
+
+        private void LoginForm_Paint(object sender, PaintEventArgs e)
+        {
+            var rect = this.ClientRectangle;
+            using (var brush = new System.Drawing.Drawing2D.LinearGradientBrush(rect, Color.FromArgb(20, 30, 60), Color.FromArgb(40, 60, 120), 45F))
+            {
+                e.Graphics.FillRectangle(brush, rect);
+            }
         }
 
         private void SetRoundedRegion(Control ctrl, int radius)
