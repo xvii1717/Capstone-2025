@@ -5,6 +5,8 @@ using System.Windows.Forms;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace ProductivityApp
 {
@@ -12,7 +14,7 @@ namespace ProductivityApp
     {
         private int currentYear = DateTime.Now.Year;
         private int currentMonth = DateTime.Now.Month;
-        public static string CurrentUsername { get; set; }
+        public static string? CurrentUsername { get; set; }
         private string CalendarDataFile => $"calendarEvents_{CurrentUsername}.json";
         private string TodoDataFile => $"todoList_{CurrentUsername}.json";
 
@@ -20,24 +22,10 @@ namespace ProductivityApp
 
         public Form1()
         {
-            // Show login form
-            using (var loginForm = new LoginForm())
-            {
-                if (loginForm.ShowDialog() == DialogResult.OK)
-                {
-                    CurrentUsername = loginForm.Username;
-                }
-                else
-                {
-                    Environment.Exit(0);
-                }
-            }
             InitializeComponent();
             this.WindowState = FormWindowState.Maximized;
             this.FormBorderStyle = FormBorderStyle.Sizable;
-            ShowMainMenu();
-            LoadData();
-            RenderCalendar(currentYear, currentMonth);
+            ShowLoginPanel();
             calendarGridPanel.Resize += (s, e) =>
             {
                 RenderCalendar(currentYear, currentMonth);
@@ -52,7 +40,7 @@ namespace ProductivityApp
                     var result = MessageBox.Show($"Remove '{item}'? This will also remove it from the calendar.", "Remove To-Do", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                     if (result == DialogResult.Yes)
                     {
-                        todoListBox.Items.Remove(item);
+                        if (item != null) todoListBox.Items.Remove(item);
                         // Remove from calendar if present
                         foreach (var date in calendarEvents.Keys.ToList())
                         {
@@ -73,7 +61,7 @@ namespace ProductivityApp
                     var result = MessageBox.Show($"Remove '{item}'? This will also remove it from the calendar.", "Remove To-Do", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                     if (result == DialogResult.Yes)
                     {
-                        todoListBox.Items.Remove(item);
+                        if (item != null) todoListBox.Items.Remove(item);
                         foreach (var date in calendarEvents.Keys.ToList())
                         {
                             calendarEvents[date].RemoveAll(ev => ev.Contains(item));
@@ -103,22 +91,7 @@ namespace ProductivityApp
                 logoutButton.Location = new Point((mainMenuPanel.Width - logoutButton.Width) / 2, 260);
             };
             logoutButton.Click += (s, e) => {
-                this.Hide();
-                using (var loginForm = new LoginForm())
-                {
-                    if (loginForm.ShowDialog() == DialogResult.OK)
-                    {
-                        CurrentUsername = loginForm.Username;
-                        LoadData();
-                        ShowMainMenu();
-                        RenderCalendar(currentYear, currentMonth);
-                        this.Show();
-                    }
-                    else
-                    {
-                        Application.Exit();
-                    }
-                }
+                LogoutUser();
             };
             mainMenuPanel.Controls.Add(logoutButton);
         }
@@ -468,6 +441,672 @@ namespace ProductivityApp
             private void todoBackButton_Click(object sender, EventArgs e)
             {
                 ShowMainMenu();
+            }
+
+            // Authentication Methods
+            private string GetUserFile() => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "users.txt");
+            private string GetSessionFile() => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "session.txt");
+            private string GetSecurityFile() => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "security.txt");
+            
+            private string HashPassword(string username, string password, string salt)
+            {
+                using (var pbkdf2 = new Rfc2898DeriveBytes(password + username, Encoding.UTF8.GetBytes(salt), 10000))
+                {
+                    return Convert.ToBase64String(pbkdf2.GetBytes(32));
+                }
+            }
+            
+            private string GenerateSalt()
+            {
+                using (var rng = RandomNumberGenerator.Create())
+                {
+                    byte[] saltBytes = new byte[16];
+                    rng.GetBytes(saltBytes);
+                    return Convert.ToBase64String(saltBytes);
+                }
+            }
+
+            private void LogoutUser()
+            {
+                CurrentUsername = null;
+                ClearRememberMe();
+                ShowLoginPanel();
+            }
+
+            private void SaveRememberMe(string username)
+            {
+                var sessionData = $"{username}:{DateTime.Now.AddDays(30):o}";
+                File.WriteAllText(GetSessionFile(), sessionData);
+            }
+
+            private void ClearRememberMe()
+            {
+                if (File.Exists(GetSessionFile()))
+                    File.Delete(GetSessionFile());
+            }
+
+            private string? CheckRememberMe()
+            {
+                if (!File.Exists(GetSessionFile())) return null;
+                
+                try
+                {
+                    var sessionData = File.ReadAllText(GetSessionFile());
+                    var parts = sessionData.Split(':');
+                    if (parts.Length >= 2)
+                    {
+                        var username = parts[0];
+                        var expiryStr = string.Join(":", parts.Skip(1));
+                        if (DateTime.TryParse(expiryStr, out var expiry) && expiry > DateTime.Now)
+                        {
+                            return username;
+                        }
+                    }
+                }
+                catch { }
+                
+                ClearRememberMe();
+                return null;
+            }
+
+            private bool IsAccountLocked(string username)
+            {
+                if (!File.Exists(GetSecurityFile())) return false;
+                
+                try
+                {
+                    foreach (var line in File.ReadAllLines(GetSecurityFile()))
+                    {
+                        var parts = line.Split(':');
+                        if (parts.Length == 3 && parts[0] == username)
+                        {
+                            var attempts = int.Parse(parts[1]);
+                            var lastAttempt = DateTime.Parse(parts[2]);
+                            
+                            // Lock for 15 minutes after 5 failed attempts
+                            if (attempts >= 5 && DateTime.Now.Subtract(lastAttempt).TotalMinutes < 15)
+                                return true;
+                        }
+                    }
+                }
+                catch { }
+                
+                return false;
+            }
+
+            private void RecordFailedAttempt(string username)
+            {
+                var securityFile = GetSecurityFile();
+                var lines = File.Exists(securityFile) ? File.ReadAllLines(securityFile).ToList() : new List<string>();
+                
+                var userLineIndex = -1;
+                var attempts = 1;
+                
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    var parts = lines[i].Split(':');
+                    if (parts.Length >= 1 && parts[0] == username)
+                    {
+                        userLineIndex = i;
+                        if (parts.Length >= 2 && int.TryParse(parts[1], out var existingAttempts))
+                        {
+                            var lastAttempt = parts.Length >= 3 ? DateTime.Parse(parts[2]) : DateTime.MinValue;
+                            
+                            // Reset attempts if last attempt was more than 15 minutes ago
+                            if (DateTime.Now.Subtract(lastAttempt).TotalMinutes > 15)
+                                attempts = 1;
+                            else
+                                attempts = existingAttempts + 1;
+                        }
+                        break;
+                    }
+                }
+                
+                var newLine = $"{username}:{attempts}:{DateTime.Now:o}";
+                
+                if (userLineIndex >= 0)
+                    lines[userLineIndex] = newLine;
+                else
+                    lines.Add(newLine);
+                
+                File.WriteAllLines(securityFile, lines);
+            }
+
+            private void ClearFailedAttempts(string username)
+            {
+                var securityFile = GetSecurityFile();
+                if (!File.Exists(securityFile)) return;
+                
+                var lines = File.ReadAllLines(securityFile).Where(line => 
+                    !line.StartsWith(username + ":")).ToArray();
+                
+                if (lines.Length == 0)
+                    File.Delete(securityFile);
+                else
+                    File.WriteAllLines(securityFile, lines);
+            }
+
+            private string GenerateSecurityQuestion(string username)
+            {
+                // Simple security question for password recovery
+                return $"What is your favorite color? (Set during registration for {username})";
+            }
+
+            private bool ValidateSecurityAnswer(string username, string answer)
+            {
+                var userFile = GetUserFile();
+                if (!File.Exists(userFile)) return false;
+                
+                foreach (var line in File.ReadAllLines(userFile))
+                {
+                    var parts = line.Split(':');
+                    if (parts.Length >= 4 && parts[0] == username)
+                    {
+                        return parts[3].Equals(answer, StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+                return false;
+            }
+
+            private void ResetPassword(string username, string newPassword)
+            {
+                var userFile = GetUserFile();
+                if (!File.Exists(userFile)) return;
+                
+                var lines = File.ReadAllLines(userFile).ToList();
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    var parts = lines[i].Split(':');
+                    if (parts.Length >= 3 && parts[0] == username)
+                    {
+                        var salt = GenerateSalt();
+                        var hash = HashPassword(username, newPassword, salt);
+                        var securityAnswer = parts.Length >= 4 ? parts[3] : "";
+                        lines[i] = $"{username}:{salt}:{hash}:{securityAnswer}";
+                        break;
+                    }
+                }
+                File.WriteAllLines(userFile, lines);
+            }
+
+            private int CalculatePasswordStrength(string password)
+            {
+                int score = 0;
+                if (password.Length >= 8) score++;
+                if (password.Length >= 12) score++;
+                if (password.Any(char.IsUpper)) score++;
+                if (password.Any(char.IsLower)) score++;
+                if (password.Any(char.IsDigit)) score++;
+                if (password.Any(c => "!@#$%^&*()_+-=[]{}|;:,.<>?".Contains(c))) score++;
+                return Math.Min(score, 5);
+            }
+
+            private string GetPasswordStrengthText(int strength)
+            {
+                return strength switch
+                {
+                    0 or 1 => "Very Weak",
+                    2 => "Weak", 
+                    3 => "Fair",
+                    4 => "Good",
+                    5 => "Strong",
+                    _ => "Unknown"
+                };
+            }
+
+            private Color GetPasswordStrengthColor(int strength)
+            {
+                return strength switch
+                {
+                    0 or 1 => Color.Red,
+                    2 => Color.Orange,
+                    3 => Color.Yellow,
+                    4 => Color.LightGreen,
+                    5 => Color.Green,
+                    _ => Color.Gray
+                };
+            }
+            
+            private bool CheckCredentials(string username, string password)
+            {
+                var file = GetUserFile();
+                if (!File.Exists(file)) return false;
+                
+                foreach (var line in File.ReadAllLines(file))
+                {
+                    var parts = line.Split(':');
+                    if (parts.Length >= 3 && parts[0] == username)
+                    {
+                        var storedSalt = parts[1];
+                        var storedHash = parts[2];
+                        var inputHash = HashPassword(username, password, storedSalt);
+                        return storedHash == inputHash;
+                    }
+                }
+                return false;
+            }
+            
+            private bool RegisterUser(string username, string password, string securityAnswer = "")
+            {
+                var file = GetUserFile();
+                if (File.Exists(file))
+                {
+                    foreach (var line in File.ReadAllLines(file))
+                    {
+                        var parts = line.Split(':');
+                        if (parts.Length >= 1 && parts[0] == username)
+                            return false; // User already exists
+                    }
+                }
+                
+                // Add new user with salt, hash, and security answer
+                var salt = GenerateSalt();
+                var hash = HashPassword(username, password, salt);
+                
+                using (var stream = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.None))
+                using (var writer = new StreamWriter(stream))
+                {
+                    writer.WriteLine($"{username}:{salt}:{hash}:{securityAnswer}");
+                }
+                return true;
+            }
+
+            // Login Panel Methods
+            private void ShowLoginPanel()
+            {
+                mainMenuPanel.Visible = false;
+                calendarPanel.Visible = false;
+                todoPanel.Visible = false;
+                
+                // Check for remembered session first
+                var rememberedUser = CheckRememberMe();
+                if (rememberedUser != null)
+                {
+                    CurrentUsername = rememberedUser;
+                    LoadData();
+                    ShowMainMenu();
+                    RenderCalendar(currentYear, currentMonth);
+                    return;
+                }
+                
+                // Create login panel if it doesn't exist
+                if (this.Controls["loginPanel"] == null)
+                {
+                    CreateLoginPanel();
+                }
+                
+                this.Controls["loginPanel"].Visible = true;
+                this.Controls["loginPanel"].BringToFront();
+            }
+            
+            private void CreateLoginPanel()
+            {
+                var loginPanel = new Panel
+                {
+                    Name = "loginPanel",
+                    Dock = DockStyle.Fill,
+                    BackColor = Color.Black
+                };
+                
+                // Gradient background
+                loginPanel.Paint += (s, e) => {
+                    var rect = loginPanel.ClientRectangle;
+                    using (var brush = new System.Drawing.Drawing2D.LinearGradientBrush(rect, Color.FromArgb(20, 30, 60), Color.FromArgb(40, 60, 120), 45F))
+                    {
+                        e.Graphics.FillRectangle(brush, rect);
+                    }
+                };
+                
+                // Center container
+                var centerPanel = new Panel
+                {
+                    Size = new Size(450, 650),
+                    BackColor = Color.Transparent,
+                    Anchor = AnchorStyles.None
+                };
+                
+                // Position center panel
+                loginPanel.Resize += (s, e) => {
+                    centerPanel.Location = new Point((loginPanel.Width - centerPanel.Width) / 2, (loginPanel.Height - centerPanel.Height) / 2);
+                };
+                
+                // Title
+                var titleLabel = new Label
+                {
+                    Text = "Welcome to\nProductivityApp",
+                    Font = new Font("Segoe UI", 22F, FontStyle.Bold),
+                    ForeColor = Color.White,
+                    Dock = DockStyle.Top,
+                    Height = 100,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    BackColor = Color.Transparent
+                };
+                
+                // Username controls
+                var usernameLabel = new Label
+                {
+                    Text = "Username:",
+                    Left = 40,
+                    Top = 120,
+                    Width = 100,
+                    Font = new Font("Segoe UI", 12F),
+                    ForeColor = Color.White,
+                    BackColor = Color.Transparent
+                };
+                
+                var usernameBox = new TextBox
+                {
+                    Name = "usernameBox",
+                    Left = 160,
+                    Top = 120,
+                    Width = 200,
+                    Font = new Font("Segoe UI", 12F),
+                    BackColor = Color.FromArgb(30, 30, 30),
+                    ForeColor = Color.White,
+                    BorderStyle = BorderStyle.FixedSingle
+                };
+                
+                // Password controls
+                var passwordLabel = new Label
+                {
+                    Text = "Password:",
+                    Left = 40,
+                    Top = 180,
+                    Width = 100,
+                    Font = new Font("Segoe UI", 12F),
+                    ForeColor = Color.White,
+                    BackColor = Color.Transparent
+                };
+                
+                var passwordBox = new TextBox
+                {
+                    Name = "passwordBox",
+                    Left = 160,
+                    Top = 180,
+                    Width = 170,
+                    UseSystemPasswordChar = true,
+                    Font = new Font("Segoe UI", 12F),
+                    BackColor = Color.FromArgb(30, 30, 30),
+                    ForeColor = Color.White,
+                    BorderStyle = BorderStyle.FixedSingle
+                };
+                
+                // Show/Hide password button
+                var showPasswordButton = new Button
+                {
+                    Text = "👁",
+                    Left = 340,
+                    Top = 180,
+                    Width = 30,
+                    Height = passwordBox.Height,
+                    Font = new Font("Segoe UI", 10F),
+                    BackColor = Color.FromArgb(60, 60, 60),
+                    ForeColor = Color.White,
+                    FlatStyle = FlatStyle.Flat
+                };
+                showPasswordButton.FlatAppearance.BorderSize = 0;
+                
+                // Password strength indicator
+                var strengthLabel = new Label
+                {
+                    Text = "",
+                    Left = 160,
+                    Top = 210,
+                    Width = 200,
+                    Font = new Font("Segoe UI", 9F),
+                    BackColor = Color.Transparent
+                };
+                
+                // Remember me checkbox
+                var rememberCheckBox = new CheckBox
+                {
+                    Text = "Remember me for 30 days",
+                    Left = 40,
+                    Top = 240,
+                    Width = 200,
+                    Font = new Font("Segoe UI", 10F),
+                    ForeColor = Color.White,
+                    BackColor = Color.Transparent
+                };
+                
+                // Security question for registration
+                var securityLabel = new Label
+                {
+                    Text = "Security Question: What is your favorite color?",
+                    Left = 40,
+                    Top = 270,
+                    Width = 320,
+                    Font = new Font("Segoe UI", 10F),
+                    ForeColor = Color.LightGray,
+                    BackColor = Color.Transparent,
+                    Visible = false
+                };
+                
+                var securityBox = new TextBox
+                {
+                    Name = "securityBox",
+                    Left = 40,
+                    Top = 295,
+                    Width = 320,
+                    Font = new Font("Segoe UI", 11F),
+                    BackColor = Color.FromArgb(30, 30, 30),
+                    ForeColor = Color.White,
+                    BorderStyle = BorderStyle.FixedSingle,
+                    Visible = false
+                };
+                
+                // Buttons
+                var loginButton = new Button
+                {
+                    Text = "Login",
+                    Left = 40,
+                    Top = 340,
+                    Width = 100,
+                    Height = 40,
+                    Font = new Font("Segoe UI", 12F, FontStyle.Bold),
+                    BackColor = Color.FromArgb(40, 60, 120),
+                    ForeColor = Color.White,
+                    FlatStyle = FlatStyle.Flat
+                };
+                loginButton.FlatAppearance.BorderSize = 0;
+                
+                var registerButton = new Button
+                {
+                    Text = "Register",
+                    Left = 160,
+                    Top = 340,
+                    Width = 100,
+                    Height = 40,
+                    Font = new Font("Segoe UI", 12F, FontStyle.Bold),
+                    BackColor = Color.FromArgb(60, 90, 180),
+                    ForeColor = Color.White,
+                    FlatStyle = FlatStyle.Flat
+                };
+                registerButton.FlatAppearance.BorderSize = 0;
+                
+                var forgotPasswordButton = new Button
+                {
+                    Text = "Forgot Password?",
+                    Left = 280,
+                    Top = 340,
+                    Width = 120,
+                    Height = 40,
+                    Font = new Font("Segoe UI", 10F),
+                    BackColor = Color.FromArgb(80, 80, 80),
+                    ForeColor = Color.White,
+                    FlatStyle = FlatStyle.Flat
+                };
+                forgotPasswordButton.FlatAppearance.BorderSize = 0;
+                
+                // Event handlers
+                showPasswordButton.Click += (s, e) =>
+                {
+                    passwordBox.UseSystemPasswordChar = !passwordBox.UseSystemPasswordChar;
+                    showPasswordButton.Text = passwordBox.UseSystemPasswordChar ? "👁" : "🙈";
+                };
+                
+                passwordBox.TextChanged += (s, e) =>
+                {
+                    if (securityBox.Visible) // Only show strength during registration
+                    {
+                        var strength = CalculatePasswordStrength(passwordBox.Text);
+                        strengthLabel.Text = $"Password Strength: {GetPasswordStrengthText(strength)}";
+                        strengthLabel.ForeColor = GetPasswordStrengthColor(strength);
+                    }
+                };
+                
+                registerButton.Click += (s, e) =>
+                {
+                    if (!securityBox.Visible)
+                    {
+                        // Show registration fields
+                        securityLabel.Visible = true;
+                        securityBox.Visible = true;
+                        strengthLabel.Visible = true;
+                        centerPanel.Height = 700;
+                        registerButton.Text = "Complete Registration";
+                        registerButton.Top = 390;
+                        loginButton.Top = 390;
+                        forgotPasswordButton.Top = 390;
+                        return;
+                    }
+                    
+                    var username = usernameBox.Text.Trim();
+                    var password = passwordBox.Text;
+                    var securityAnswer = securityBox.Text.Trim();
+                    
+                    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(securityAnswer))
+                    {
+                        MessageBox.Show("Please fill in all fields.");
+                        return;
+                    }
+                    
+                    var strength = CalculatePasswordStrength(password);
+                    if (strength < 3)
+                    {
+                        MessageBox.Show("Password is too weak. Please use a stronger password with uppercase, lowercase, numbers, and symbols.");
+                        return;
+                    }
+                    
+                    if (RegisterUser(username, password, securityAnswer))
+                    {
+                        MessageBox.Show("Registration successful! You can now log in.");
+                        // Reset form
+                        passwordBox.Clear();
+                        securityBox.Clear();
+                        securityLabel.Visible = false;
+                        securityBox.Visible = false;
+                        strengthLabel.Visible = false;
+                        centerPanel.Height = 650;
+                        registerButton.Text = "Register";
+                        registerButton.Top = 340;
+                        loginButton.Top = 340;
+                        forgotPasswordButton.Top = 340;
+                    }
+                    else
+                    {
+                        MessageBox.Show("Username already exists. Please choose a different username.");
+                    }
+                };
+                
+                usernameBox.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) loginButton.PerformClick(); };
+                passwordBox.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) loginButton.PerformClick(); };
+                
+                loginButton.Click += (s, e) =>
+                {
+                    var username = usernameBox.Text.Trim();
+                    var password = passwordBox.Text;
+                    
+                    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+                    {
+                        MessageBox.Show("Please enter both username and password.");
+                        return;
+                    }
+                    
+                    if (IsAccountLocked(username))
+                    {
+                        MessageBox.Show("Account is temporarily locked due to multiple failed login attempts. Please try again in 15 minutes.");
+                        return;
+                    }
+                    
+                    if (CheckCredentials(username, password))
+                    {
+                        CurrentUsername = username;
+                        ClearFailedAttempts(username);
+                        
+                        if (rememberCheckBox.Checked)
+                        {
+                            SaveRememberMe(username);
+                        }
+                        
+                        loginPanel.Visible = false;
+                        LoadData();
+                        ShowMainMenu();
+                        RenderCalendar(currentYear, currentMonth);
+                    }
+                    else
+                    {
+                        RecordFailedAttempt(username);
+                        MessageBox.Show("Invalid username or password.");
+                        passwordBox.Clear();
+                    }
+                };
+                
+                forgotPasswordButton.Click += (s, e) =>
+                {
+                    var username = usernameBox.Text.Trim();
+                    if (string.IsNullOrWhiteSpace(username))
+                    {
+                        MessageBox.Show("Please enter your username first.");
+                        return;
+                    }
+                    
+                    var question = GenerateSecurityQuestion(username);
+                    var answer = Microsoft.VisualBasic.Interaction.InputBox(question, "Security Question", "");
+                    
+                    if (string.IsNullOrWhiteSpace(answer))
+                        return;
+                    
+                    if (ValidateSecurityAnswer(username, answer))
+                    {
+                        var newPassword = Microsoft.VisualBasic.Interaction.InputBox("Enter your new password:", "Reset Password", "");
+                        if (!string.IsNullOrWhiteSpace(newPassword) && newPassword.Length >= 6)
+                        {
+                            ResetPassword(username, newPassword);
+                            MessageBox.Show("Password reset successfully! You can now log in with your new password.");
+                            passwordBox.Clear();
+                        }
+                        else
+                        {
+                            MessageBox.Show("Password must be at least 6 characters long.");
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show("Incorrect security answer.");
+                    }
+                };
+                
+                // Add controls to center panel
+                centerPanel.Controls.Add(titleLabel);
+                centerPanel.Controls.Add(usernameLabel);
+                centerPanel.Controls.Add(passwordLabel);
+                centerPanel.Controls.Add(usernameBox);
+                centerPanel.Controls.Add(passwordBox);
+                centerPanel.Controls.Add(showPasswordButton);
+                centerPanel.Controls.Add(strengthLabel);
+                centerPanel.Controls.Add(rememberCheckBox);
+                centerPanel.Controls.Add(securityLabel);
+                centerPanel.Controls.Add(securityBox);
+                centerPanel.Controls.Add(loginButton);
+                centerPanel.Controls.Add(registerButton);
+                centerPanel.Controls.Add(forgotPasswordButton);
+                
+                loginPanel.Controls.Add(centerPanel);
+                this.Controls.Add(loginPanel);
+                
+                // Initial positioning
+                centerPanel.Location = new Point((loginPanel.Width - centerPanel.Width) / 2, (loginPanel.Height - centerPanel.Height) / 2);
             }
     }
 }
